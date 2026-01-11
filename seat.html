@@ -1,0 +1,268 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>動態座位表（拖曳交換｜自動儲存｜1920×1080）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* ===== 全域：黑底、白字、微軟中黑體；以 transform 等比縮放 ===== */
+    html, body { margin:0; padding:0; background:#000; color:#fff; height:100%; overflow:hidden; }
+    body { font-family: "Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif; }
+
+    /* ===== 自動縮放容器：把 1920×1080 舞台等比縮放置中（高度優先） ===== */
+    #viewport { position:relative; width:100vw; height:100vh; }
+    #stage-wrap { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin: top left; }
+    #stage {
+      position:absolute; inset:0;
+      display:grid; grid-template-rows: auto 1fr;
+      padding: 40px 60px;
+    }
+
+    /* ===== 頂部工具列 ===== */
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 24px;
+    }
+    .title {
+      font-size: 40px; letter-spacing: .06em; font-weight: 700;
+    }
+    .tools { display:flex; gap:10px; }
+    .btn {
+      font-size: 18px; padding: 10px 14px; border-radius: 10px;
+      background:#111827; color:#fff; border:1px solid #2b3b69; cursor:pointer;
+    }
+    .btn:hover { background:#1f2937; }
+
+    /* ===== 座位表（藍表頭＋斑馬紋；與你既有風格一致） ===== */
+    .table-wrap { overflow:auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: #3a66b3; color:#fff; font-size:42px; padding: 16px 0; border: 1px solid #cbd5e1;
+      text-align: center;
+    }
+    tbody td {
+      font-size: 28px; padding: 16px; text-align: center; position: relative;
+      border: 1px solid #3a4660; background: rgba(255,255,255,.06); min-width: 140px; height: 96px;
+    }
+    tbody tr:nth-child(even) td { background: rgba(255,255,255,.12); }
+
+    /* 一個座位的「同學卡」(chip) 可拖曳；維持白字＋座號強調 */
+    .chip {
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      background: rgba(17,24,39,.9); border:1px solid #2b3b69; border-radius: 12px;
+      padding: 10px 14px; cursor: grab; user-select: none;
+    }
+    .chip:active { cursor: grabbing; }
+    .num   { font-weight: 800; font-size: 30px; letter-spacing: .02em; }
+    .name  { font-size: 54px; letter-spacing: .02em; }
+
+    /* 拖曳時的視覺提示 */
+    td.drag-over { outline: 3px dashed #60a5fa; }
+    td.empty { color: #888; }
+
+    /* 註：桌標題「講桌」 */
+    .desk { font-weight: 700; letter-spacing: .06em; }
+
+    /* 手機觸控小提示 */
+    .hint { margin-top: 10px; color:#9ca3af; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage-wrap">
+      <div id="stage">
+        <!-- 頂部工具列 -->
+        <div class="topbar">
+          <div class="title">座位表（拖曳交換 / 自動儲存）</div>
+          <div class="tools">
+            <button class="btn" id="resetDefault">恢復預設（載入投影片座位）</button>
+            <button class="btn" id="clearAll">清空全表</button>
+          </div>
+        </div>
+
+        <!-- 座位表 -->
+        <div class="table-wrap">
+          <table id="seatTable">
+            <thead>
+              <tr><th colspan="6" class="desk">講桌</th></tr>
+            </thead>
+            <tbody id="seatBody"><!-- 由 JS 載入 --></tbody>
+          </table>
+          <div class="hint">提示：用滑鼠拖曳「座號＋姓名」到其他座位；手機可長按拖動（視瀏覽器支援）。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== 自動縮放：優先以視窗高度貼齊上下，必要時退回同時容納寬高 ===== */
+    function scaleStage(){
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const sw = 1920, sh = 1080;
+      let scale = vh / sh;                         // 高度優先
+      if (sw * scale > vw) scale = Math.min(vw / sw, vh / sh); // 寬度不足時回退
+      const wrap = document.getElementById("stage-wrap");
+      const tx = (vw - sw*scale)/2, ty = (vh - sh*scale)/2;
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    }
+    window.addEventListener("resize", scaleStage);
+    window.addEventListener("orientationchange", scaleStage);
+    scaleStage();
+
+    /* ===== LocalStorage：依當日保存座位排列 ===== */
+    function toYMD(date){
+      const y = date.getFullYear(), m = String(date.getMonth()+1).padStart(2,"0"), d = String(date.getDate()).padStart(2,"0");
+      return `${y}-${m}-${d}`;
+    }
+    const todayKey = (part) => `${part}:${toYMD(new Date())}`;
+    const LS = {
+      get(k, fallback){ try{ const v = localStorage.getItem(k); return v===null?fallback:JSON.parse(v);}catch{ return fallback; } },
+      set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+    };
+
+    /* ===== 初始座位：取自你上傳的投影片（5×6；第一列最後一格空） =====
+       格式：字串 "座號姓名"，例如 "16王楚皓"；空位用 ""。 */
+    function defaultSeatStrings(){
+      return [
+        ["16王楚皓","04姜德鈺","01尤星雅","12葛乙涵","02王奕晴",""],
+        ["08陳唯萱","13劉芊蒂","03王湘緹","07張瑜桐","20林家鴻","21林時任"],
+        ["32蘇御鈞","22洪志丞","27黃唯晴","14謝瑜恩","29楊詠然","26曾以安"],
+        ["09黃香菱","19林秉宸","15方東翰","23高于凱","10黃彩育","17吳劭祺"],
+        ["24張瑋丞","18李承宥","30盧敬之","31魏威寧","06高珞庭","25陳品叡"]
+      ];
+    }
+    /* 把 "16王楚皓" 轉成 {no:"16", name:"王楚皓"}；空位轉成 null */
+    function stringifyToObjects(grid){
+      return grid.map(row => row.map(cell => {
+        const s = (cell || "").trim();
+        if(!s) return null;
+        const m = s.match(/^(\d+)\s*(.+)$/);
+        return m ? {no: m[1], name: m[2]} : {no: "", name: s};
+      }));
+    }
+    function objectsToStrings(grid){
+      return grid.map(row => row.map(cell => cell ? `${cell.no}${cell.name}` : ""));
+    }
+
+    /* ===== 渲染表格（建立可拖曳 chip） ===== */
+    const seatBody = document.getElementById("seatBody");
+    function renderSeats(data){ // data: 2D array of {no,name} or null
+      seatBody.innerHTML = "";
+      data.forEach((row, rIdx) => {
+        const tr = document.createElement("tr");
+        row.forEach((person, cIdx) => {
+          const td = document.createElement("td");
+          td.dataset.row = rIdx; td.dataset.col = cIdx;
+
+          if(person){
+            const chip = document.createElement("div");
+            chip.className = "chip";
+            chip.draggable = true;
+            chip.innerHTML = `<span class="num">${person.no}</span><span class="name">${person.name}</span>`;
+            chip.addEventListener("dragstart", onDragStart);
+            chip.addEventListener("dragend", onDragEnd);
+            td.appendChild(chip);
+          } else {
+            td.classList.add("empty");
+            td.textContent = "（空位）";
+          }
+
+          // Drop 事件在 td 上
+          td.addEventListener("dragover", onDragOver);
+          td.addEventListener("dragleave", onDragLeave);
+          td.addEventListener("drop", onDrop);
+
+          tr.appendChild(td);
+        });
+        seatBody.appendChild(tr);
+      });
+    }
+
+    /* ===== 拖曳邏輯：支援交換或移動到空位 ===== */
+    let dragFrom = null; // {row,col}
+    function onDragStart(e){
+      const td = e.target.closest("td");
+      dragFrom = { row: +td.dataset.row, col: +td.dataset.col };
+      e.dataTransfer.effectAllowed = "move";
+      // 自訂拖曳影像（可選）
+      const crt = e.target.cloneNode(true);
+      crt.style.position = "absolute"; crt.style.top = "-1000px"; crt.style.left = "-1000px";
+      document.body.appendChild(crt);
+      e.dataTransfer.setDragImage(crt, 40, 20);
+      setTimeout(()=>document.body.removeChild(crt), 0);
+    }
+    function onDragEnd(){
+      dragFrom = null;
+      seatBody.querySelectorAll("td.drag-over").forEach(td => td.classList.remove("drag-over"));
+    }
+    function onDragOver(e){
+      e.preventDefault();
+      const td = e.currentTarget;
+      td.classList.add("drag-over");
+      e.dataTransfer.dropEffect = "move";
+    }
+    function onDragLeave(e){
+      e.currentTarget.classList.remove("drag-over");
+    }
+    function onDrop(e){
+      e.preventDefault();
+      const td = e.currentTarget;
+      td.classList.remove("drag-over");
+      if(!dragFrom) return;
+
+      const to = { row: +td.dataset.row, col: +td.dataset.col };
+      if(dragFrom.row === to.row && dragFrom.col === to.col) return; // 同一格，忽略
+
+      const grid = readGrid(); // 取得目前二維資料
+      const fromPerson = grid[dragFrom.row][dragFrom.col];
+      const toPerson   = grid[to.row][to.col];
+
+      // 交換或移動
+      grid[to.row][to.col] = fromPerson;
+      grid[dragFrom.row][dragFrom.col] = toPerson ?? null;
+
+      saveGrid(grid);
+      renderSeats(grid);
+    }
+
+    /* ===== 讀寫目前座位資料（2D array of {no,name} or null） ===== */
+    function readGrid(){
+      // 從 DOM 讀，避免狀態不一致
+      const rows = Array.from(seatBody.querySelectorAll("tr"));
+      return rows.map(tr => Array.from(tr.querySelectorAll("td")).map(td => {
+        const chip = td.querySelector(".chip");
+        if(!chip) return null;
+        const no = chip.querySelector(".num")?.textContent ?? "";
+        const name = chip.querySelector(".name")?.textContent ?? "";
+        return {no, name};
+      }));
+    }
+    function saveGrid(grid){ LS.set(todayKey("seats-draggable"), grid); }
+    function loadGrid(){
+      const saved = LS.get(todayKey("seats-draggable"), null);
+      if(saved && Array.isArray(saved) && saved.length){
+        renderSeats(saved);
+      } else {
+        renderSeats(stringifyToObjects(defaultSeatStrings()));
+      }
+    }
+
+    /* ===== 工具：清空／恢復預設 ===== */
+    document.getElementById("clearAll").addEventListener("click", ()=>{
+      const rows = seatBody.querySelectorAll("tr");
+      rows.forEach(tr => tr.querySelectorAll("td").forEach(td => td.innerHTML = ""));
+      const empty = Array.from({length:5},()=>Array.from({length:6},()=>null));
+      renderSeats(empty);
+      saveGrid(empty);
+    });
+    document.getElementById("resetDefault").addEventListener("click", ()=>{
+      const grid = stringifyToObjects(defaultSeatStrings());
+      renderSeats(grid);
+      saveGrid(grid);
+    });
+
+    /* 初始載入 */
+    loadGrid();
+  </script>
+</body>
+</html>
