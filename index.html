@@ -3,270 +3,412 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <title>動態座位表（拖曳交換｜自動儲存｜1920×1080）</title>
+  <title>新生智力測</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    /* ===== 全域：黑底、白字、微軟中黑體；以 transform 等比縮放 ===== */
+    /* ===== 全域：黑底、白字、微軟中黑體；transform 等比縮放 ===== */
     html, body { margin:0; padding:0; background:#000; color:#fff; height:100%; overflow:hidden; }
     body { font-family: "Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif; }
 
     /* ===== 自動縮放容器：把 1920×1080 舞台等比縮放置中（高度優先） ===== */
     #viewport { position:relative; width:100vw; height:100vh; }
     #stage-wrap { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin: top left; }
-    #stage {
-      position:absolute; inset:0;
-      display:grid; grid-template-rows: auto 1fr;
-      padding: 40px 60px;
+    #stage { position:absolute; inset:0; display:grid; grid-template-columns: 780px 1140px; }
+
+    /* ===== 左右欄與分隔線 ===== */
+    .left  { padding: 60px 60px 40px 60px; display:grid; grid-template-rows: auto auto 1fr; }
+    .right { padding: 60px 60px 40px 40px; display:grid; grid-template-rows: auto auto 1fr auto; row-gap: 24px; }
+    .divider { position:absolute; left:780px; top:60px; bottom:60px; width:2px; background:#89a8ff; box-shadow:0 0 2px #89a8ff; }
+
+    /* ===== 日期（只月日＋星期） ===== */
+    .date-line { font-size: 48px; letter-spacing: 0.08em; }
+
+    /* ===== 左側行程（維持原字級；用 flex 在可用高度上下均分） ===== */
+    .title { font-size: 54px; letter-spacing: 0.08em; margin: 24px 0 12px; }
+    .schedule { list-style:none; padding:0; margin:0; height:100%; display:flex; flex-direction:column; justify-content:space-between; }
+    .schedule li {
+      font-size: 40px; line-height: 1.45;
+      display:flex; align-items:center; justify-content:space-between; gap: 40px;
+      padding: 4px 8px; border-radius: 8px; margin: 0;
+      transition: background-color .2s, color .2s;
+    }
+    .time    { color:#e5e7eb; }
+    .subject { color:#fff; }
+    .subject[contenteditable="true"] { border-bottom: 1px dashed rgba(255,255,255,.25); }
+    .subject[contenteditable="true"]:focus { outline: 2px solid #60a5fa; background: rgba(96,165,250,.08); }
+
+    /* 當前時段高亮：底 #EAFA50、字 #EC4E1C */
+    .schedule li.current { background:#EAFA50; }
+    .schedule li.current .time,
+    .schedule li.current .subject { color:#EC4E1C; }
+
+    /* ===== 右上：注意時間掌控（只在指定時段整列顯示） ===== */
+    .top-row { display:flex; align-items:center; justify-content:space-between; gap:24px; }
+    .top-row h2 { font-size: 36px; margin:0; letter-spacing:0.08em; white-space:nowrap; }
+    #timeDisplay {
+      width: 600px; height: 120px; display:flex; align-items:center; justify-content:center;
+      border-radius: 12px; border: 1px solid #2b3b69;
+      font-feature-settings:"tnum"; font-variant-numeric: tabular-nums;
+      font-size: 80px; font-weight: 800; letter-spacing: 0.06em;
+      background:#111827; color:#fff;
     }
 
-    /* ===== 頂部工具列 ===== */
-    .topbar {
-      display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 24px;
-    }
-    .title {
-      font-size: 40px; letter-spacing: .06em; font-weight: 700;
-    }
-    .tools { display:flex; gap:10px; }
-    .btn {
-      font-size: 18px; padding: 10px 14px; border-radius: 10px;
-      background:#111827; color:#fff; border:1px solid #2b3b69; cursor:pointer;
-    }
-    .btn:hover { background:#1f2937; }
+    /* ===== 右側提醒字句（48px） ===== */
+    .notes-line { font-size: 48px; color:#f0f0f0; display:flex; gap:60px; flex-wrap:wrap; margin-top: 12px; }
 
-    /* ===== 座位表（藍表頭＋斑馬紋；與你既有風格一致） ===== */
-    .table-wrap { overflow:auto; }
+    /* ===== 座位表（藍表頭＋斑馬紋） ===== */
+    .table-wrap { align-self: start; }
     table { width: 100%; border-collapse: collapse; }
     thead th {
-      background: #3a66b3; color:#fff; font-size:42px; padding: 16px 0; border: 1px solid #cbd5e1;
-      text-align: center;
+      background: #3a66b3; color:#fff; font-size: 32px; padding: 16px 0; border: 1px solid #cbd5e1;
+      font-family: "Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif;
+      text-align:center;
     }
     tbody td {
-      font-size: 28px; padding: 16px; text-align: center; position: relative;
-      border: 1px solid #3a4660; background: rgba(255,255,255,.06); min-width: 140px; height: 96px;
+      font-size: 32px; padding: 12px 0; text-align: center;
+      border: 1px solid #3a4660; background: rgba(255,255,255,.06); min-width: 120px;
+      font-family: "Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif;
     }
     tbody tr:nth-child(even) td { background: rgba(255,255,255,.12); }
+    td[contenteditable="true"]:focus { outline: 2px solid #60a5fa; background: rgba(96,165,250,.2); }
 
-    /* 一個座位的「同學卡」(chip) 可拖曳；維持白字＋座號強調 */
-    .chip {
-      display:inline-flex; align-items:center; justify-content:center; gap:10px;
-      background: rgba(17,24,39,.9); border:1px solid #2b3b69; border-radius: 12px;
-      padding: 10px 14px; cursor: grab; user-select: none;
+    /* ===== 底部：同列（應考人數＋缺考）；下一列（備註可輸入） ===== */
+    .footer { font-size: 20px; }
+    .footer .row { margin-top: 14px; display:flex; gap: 24px; align-items:center; flex-wrap: nowrap; }
+    .footer input {
+      font-size: 36px; line-height: 1.3; color:#fff; background: transparent;
+      border: 1px solid rgba(255,255,255,.35); border-radius: 10px; padding: 10px 14px;
+      font-family: "Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif;
     }
-    .chip:active { cursor: grabbing; }
-    .num   { font-weight: 800; font-size: 30px; letter-spacing: .02em; }
-    .name  { font-size: 54px; letter-spacing: .02em; }
+    #candidateCount { width:220px; }
+    .footer .absent-label, .footer .note-label { white-space:nowrap; }
+    #absentInput, #noteInput { flex: 1 1 auto; min-width: 0; max-width: 100%; }
 
-    /* 拖曳時的視覺提示 */
-    td.drag-over { outline: 3px dashed #60a5fa; }
-    td.empty { color: #888; }
-
-    /* 註：桌標題「講桌」 */
-    .desk { font-weight: 700; letter-spacing: .06em; }
-
-    /* 手機觸控小提示 */
-    .hint { margin-top: 10px; color:#9ca3af; font-size: 16px; }
+    /* ===== 右下：浮動控制（全螢幕＋縮放） ===== */
+    .float-controls {
+      position: fixed; right: 20px; bottom: 20px;
+      display: flex; gap: 10px; align-items: center;
+      z-index: 9999;
+      background: rgba(17,24,39,.7);
+      border: 1px solid #2b3b69;
+      border-radius: 12px;
+      padding: 8px 10px;
+      backdrop-filter: blur(4px);
+    }
+    .fc-btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      width: 44px; height: 44px; border-radius: 10px;
+      color:#fff; background:#111827; border:1px solid #2b3b69;
+      cursor:pointer; user-select:none;
+    }
+    .fc-btn:hover { background:#1f2937; }
+    .fc-label { font-size:14px; color:#cbd5e1; padding:0 6px; min-width:52px; text-align:right; }
+    .icon { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; }
+    @media print { .float-controls { display:none; } }
   </style>
 </head>
 <body>
   <div id="viewport">
     <div id="stage-wrap">
       <div id="stage">
-        <!-- 頂部工具列 -->
-        <div class="topbar">
-          <div class="title">座位表（拖曳交換 / 自動儲存）</div>
-          <div class="tools">
-            <button class="btn" id="resetDefault">恢復預設（載入投影片座位）</button>
-            <button class="btn" id="clearAll">清空全表</button>
-          </div>
-        </div>
+        <div class="divider" aria-hidden="true"></div>
 
-        <!-- 座位表 -->
-        <div class="table-wrap">
-          <table id="seatTable">
-            <thead>
-              <tr><th colspan="6" class="desk">講桌</th></tr>
-            </thead>
-            <tbody id="seatBody"><!-- 由 JS 載入 --></tbody>
-          </table>
-          <div class="hint">提示：用滑鼠拖曳「座號＋姓名」到其他座位；手機可長按拖動（視瀏覽器支援）。</div>
-        </div>
+        <!-- 左欄：日期＋標題＋行程（用 flex 均分高度） -->
+        <section class="left">
+          <div class="date-line" id="dateText">—月—日 星期—</div>
+          <div class="title">考試時段及科目</div>
+          <ul class="schedule">
+            <li id="slot1"><span class="time">9:00–9:15</span><span class="subject" id="self1" contenteditable="true">語文測驗說明</span></li>
+            <li id="slot2"><span class="time">9:15–9:25</span><span class="subject" id="sub1"  contenteditable="true">語文推理測驗</span></li>
+            <li id="slot3"><span class="time">9:25–9:35</span><span class="subject" id="self2" contenteditable="true">收發答案卡</span></li>
+            <li id="slot4"><span class="time">9:35–9:47</span><span class="subject" id="sub2" contenteditable="true">數量推理測驗</span></li>
+            <li id="slot5"><span class="time">9:47–9:57</span><span class="subject" id="self3" contenteditable="true">收發答案卡</span></li>
+            <li id="slot6"><span class="time">9:57–10:07</span><span class="subject" id="sub3" contenteditable="true">圖形推理測驗</span></li>
+            <li id="slot7"><span class="time">10:07–10:12</span><span class="subject" id="self4" contenteditable="true">收回答案卡及計算紙</span></li>
+          </ul>
+        </section>
+
+        <!-- 右欄：注意時間掌控（時段內顯示）＋提醒字句（48px）＋座位表＋底部列 -->
+        <section class="right">
+          <div class="top-row" id="timeRow" style="display:none;">
+            <h2>注意時間掌控</h2>
+            <div id="timeDisplay" aria-live="polite"></div>
+          </div>
+
+          <div class="notes-line">
+            <span>手機、智慧手錶置入手機箱</span>
+            <span>考試時，桌面只留文具</span>
+          </div>
+
+          <div class="table-wrap">
+            <!-- 重置座位鈕（可選） -->
+            <div style="display:flex; justify-content:flex-end; margin:6px 0 8px;">
+              <button id="btnResetSeats" style="
+                font-size:18px; padding:6px 10px; border-radius:8px;
+                background:#111827; color:#fff; border:1px solid #2b3b69; cursor:pointer;">
+                ↻ 重置座位（載入預設）
+              </button>
+            </div>
+            <table id="seatTable">
+              <thead><tr><th colspan="6">座位表</th></tr></thead>
+              <tbody id="seatBody"></tbody>
+            </table>
+          </div>
+
+          <!-- 底部：同列（應考人數＋缺考）／ 下一列（備註可輸入） -->
+          <div class="footer">
+            <div class="row">
+              <span>應考人數：</span>
+              <input type="number" id="candidateCount" min="0" placeholder="人" />
+              <span class="absent-label">缺考：</span>
+              <input type="text" id="absentInput" placeholder="  " />
+            </div>
+            <div class="row">
+              <span class="note-label">備註：</span>
+              <input type="text" id="noteInput" placeholder="  " />
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 
+  <!-- 右下角：全螢幕＋縮放控制（像 YouTube） -->
+  <div class="float-controls" role="group" aria-label="視窗控制">
+    <button class="fc-btn" id="btnFS" aria-pressed="false" aria-label="全螢幕">
+      <!-- 進入全螢幕圖示（四角向外） -->
+      <svg class="icon" id="iconEnter" viewBox="0 0 24 24">
+        <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>
+      </svg>
+      <!-- 退出全螢幕圖示（四角向內） -->
+      <svg class="icon" id="iconExit" viewBox="0 0 24 24" style="display:none;">
+        <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/>
+      </svg>
+    </button>
+    <button class="fc-btn" id="btnZoomOut" aria-label="縮小">–</button>
+    <span class="fc-label" id="zoomLabel">100%</span>
+    <button class="fc-btn" id="btnZoomIn" aria-label="放大">＋</button>
+  </div>
+
   <script>
-    /* ===== 自動縮放：優先以視窗高度貼齊上下，必要時退回同時容納寬高 ===== */
+    /* ===== 自動縮放：高度優先；加入使用者縮放倍率 ===== */
+    let userZoom = 1.0; // 手動縮放（100%）
+    const ZOOM_STEP = 0.1, MIN_ZOOM = 0.6, MAX_ZOOM = 2.0;
     function scaleStage(){
       const vw = window.innerWidth, vh = window.innerHeight;
       const sw = 1920, sh = 1080;
-      let scale = vh / sh;                         // 高度優先
-      if (sw * scale > vw) scale = Math.min(vw / sw, vh / sh); // 寬度不足時回退
+      let baseScale = vh / sh;
+      if (sw * baseScale > vw) baseScale = Math.min(vw/sw, vh/sh);
+      const finalScale = baseScale * userZoom;
       const wrap = document.getElementById("stage-wrap");
-      const tx = (vw - sw*scale)/2, ty = (vh - sh*scale)/2;
-      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      const tx = (vw - sw*finalScale)/2, ty = (vh - sh*finalScale)/2;
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${finalScale})`;
+      document.getElementById("zoomLabel").textContent = `${Math.round(userZoom*100)}%`;
     }
     window.addEventListener("resize", scaleStage);
     window.addEventListener("orientationchange", scaleStage);
     scaleStage();
 
-    /* ===== LocalStorage：依當日保存座位排列 ===== */
+    /* ===== 日期（MM月DD日 星期X；每分鐘更新） ===== */
+    const weekdayNames = ["星期日","星期一","星期二","星期三","星期四","星期五","星期六"];
     function toYMD(date){
       const y = date.getFullYear(), m = String(date.getMonth()+1).padStart(2,"0"), d = String(date.getDate()).padStart(2,"0");
       return `${y}-${m}-${d}`;
     }
+    function updateDate(){
+      const now = new Date();
+      const m = String(now.getMonth()+1).padStart(2,"0");
+      const d = String(now.getDate()).padStart(2,"0");
+      document.getElementById("dateText").textContent = `${m}月${d}日 ${weekdayNames[now.getDay()]}`;
+    }
+    updateDate();
+    setInterval(updateDate, 60_000);
+
+    /* ===== 「注意時間掌控」：只在三段期間整列顯示（如需半天可自行調整） ===== */
+    function minutes(h,m){ return h*60 + m; }
+    const DISPLAY_RANGES = [
+      [minutes(6,30), minutes(19,19)],  // 06:30–19:19
+         ];
+    function inDisplayRanges(date){
+      const t = date.getHours()*60 + date.getMinutes();
+      return DISPLAY_RANGES.some(([s,e]) => t >= s && t <= e);
+    }
+    function updateTimeRow(){
+      const now = new Date();
+      const row = document.getElementById("timeRow");
+      const box = document.getElementById("timeDisplay");
+      if(inDisplayRanges(now)){
+        const hh = String(now.getHours()).padStart(2,"0");
+        const mm = String(now.getMinutes()).padStart(2,"0");
+        const ss = String(now.getSeconds()).padStart(2,"0");
+        box.textContent = `${hh}:${mm}:${ss}`;
+        row.style.display = "flex";
+      } else {
+        row.style.display = "none";
+      }
+    }
+    updateTimeRow();
+    setInterval(updateTimeRow, 1000);
+
+    /* ===== 左側行程：目前時間自動高亮（半天版：slot1～slot4） ===== */
+    const SLOTS = [
+      { id:"slot1", s:[9,00], e:[9,15] },
+      { id:"slot2", s:[9,15], e:[9,25] },
+      { id:"slot3", s:[9,25], e:[9,35] },
+      { id:"slot4", s:[9,35], e:[9,47] },
+      { id:"slot5", s:[9,47], e:[9,57] },
+      { id:"slot6", s:[9,57], e:[10,07] },
+      { id:"slot7", s:[10,07], e:[10,12] }
+    ];
+    function minutesSinceMidnight(h,m){ return h*60 + m; }
+    function updateCurrentSlot(){
+      const now = new Date();
+      const cur = minutesSinceMidnight(now.getHours(), now.getMinutes());
+      // 先移除所有高亮（若元素不存在則略過）
+      SLOTS.forEach(x => { const el = document.getElementById(x.id); if (el) el.classList.remove("current"); });
+      // 針對當前時段加高亮（元素存在時才操作）
+      for(const x of SLOTS){
+        const s = minutesSinceMidnight(x.s[0], x.s[1]);
+        const e = minutesSinceMidnight(x.e[0], x.e[1]);
+        if(cur >= s && cur <= e){
+          const el = document.getElementById(x.id);
+          if (el) el.classList.add("current");
+          break;
+        }
+      }
+    }
+    updateCurrentSlot();
+    setInterval(updateCurrentSlot, 30_000);
+
+    /* ===== LocalStorage：依當日保存可編輯內容 ===== */
     const todayKey = (part) => `${part}:${toYMD(new Date())}`;
     const LS = {
-      get(k, fallback){ try{ const v = localStorage.getItem(k); return v===null?fallback:JSON.parse(v);}catch{ return fallback; } },
+      get(k, fallback){ try{ const v = localStorage.getItem(k); return v===null?fallback:JSON.parse(v); }catch{ return fallback; } },
       set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
     };
 
-    /* ===== 初始座位：取自你上傳的投影片（5×6；第一列最後一格空） =====
-       格式：字串 "座號姓名"，例如 "16王楚皓"；空位用 ""。 */
-    function defaultSeatStrings(){
-      return [
- 
- 
-  ["22 洪志丞", "29 楊詠然", "32 蘇御鈞", "24 張瑋丞", "17 吳劭祺", ""],
-  ["02 王奕晴", "08 陳唯萱", "14 謝瑜恩", "25 陳品叡", "15 方東翰", "04 姜德鈺"],
-  ["09 黃香菱", "01 尤星雅", "06 高珞庭", "03 王湘緹", "30 盧敬之", "12 葛乙涵"],
-  ["20 林家鴻", "23 高于凱", "21 林時任", "31 魏威寧", "10 黃彩育", "13 劉芊蒂"],
-  ["26 曾以安", "19 林秉宸", "27 黃唯晴", "18 李承宥", "07 張瑜桐", "16 王楚皓"]
+    /* 可編輯：半天只保留自習／考科一／自習／考科二（加上 null 保護） */
+    ["self1","sub1","self2","sub2"].forEach((id)=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      const saved = LS.get(todayKey(`subject:${id}`), null);
+      if(saved!==null) el.textContent = saved;
+      el.addEventListener("input", ()=> LS.set(todayKey(`subject:${id}`), el.textContent.trim()));
+    });
 
-  
+    /* 應考人數／缺考／備註（保存） */
+    const candidateCount = document.getElementById("candidateCount");
+    const absentInput   = document.getElementById("absentInput");
+    const noteInput     = document.getElementById("noteInput");
+    const savedCount  = LS.get(todayKey("candidateCount"), "");
+    const savedAbsent = LS.get(todayKey("absentList"), "");
+    const savedNote   = LS.get(todayKey("note"), "");
+    if(savedCount!=="")  candidateCount.value = savedCount;
+    if(savedAbsent!=="") absentInput.value   = savedAbsent;
+    if(savedNote!=="")   noteInput.value     = savedNote;
+    candidateCount.addEventListener("input", ()=> LS.set(todayKey("candidateCount"), candidateCount.value));
+    absentInput.addEventListener("input",   ()=> LS.set(todayKey("absentList"),   absentInput.value));
+    noteInput.addEventListener("input",     ()=> LS.set(todayKey("note"),         noteInput.value));
+
+    /* ===== 座位表（5×6；每格可編輯；更強防呆載入） ===== */
+    const seatBody = document.getElementById("seatBody");
+    function defaultSeats(){
+      return [
+        ["27 謝欣妍", "22 謝侑彤", "17 李怡靜", "11 高丞彥", "06 邱定緯", "01 陳芊妤"],
+        ["28 吳拓均", "23 張瑞倪", "18 杜柏維", "12 許立揚", "07 鄭淇如", "02 陳芊綾"],
+        ["29 汪郁諼", "24 蔡其樺", "19 王迦叡", "13 王晨懿", "08 劉宸碩", "03 姜翰希"],
+        ["30 林暐翔", "25 陳沐澤", "20 黃睿恩", "14 李秉祐", "09 蔡宜樵", "04 李芷儀"],
+        ["31 郭品寬", "26 朱章越", "21 方子宥", "15 曾 澄", "10 陳語真", "05 莊苡歆"],
+        ["", "", "", "16 王譽潔", "", ""]
       ];
     }
-    /* 把 "16王楚皓" 轉成 {no:"16", name:"王楚皓"}；空位轉成 null */
-    function stringifyToObjects(grid){
-      return grid.map(row => row.map(cell => {
-        const s = (cell || "").trim();
-        if(!s) return null;
-        const m = s.match(/^(\d+)\s*(.+)$/);
-        return m ? {no: m[1], name: m[2]} : {no: "", name: s};
-      }));
-    }
-    function objectsToStrings(grid){
-      return grid.map(row => row.map(cell => cell ? `${cell.no}${cell.name}` : ""));
-    }
-
-    /* ===== 渲染表格（建立可拖曳 chip） ===== */
-    const seatBody = document.getElementById("seatBody");
-    function renderSeats(data){ // data: 2D array of {no,name} or null
+    function renderSeats(data){
       seatBody.innerHTML = "";
-      data.forEach((row, rIdx) => {
+      data.forEach(row=>{
         const tr = document.createElement("tr");
-        row.forEach((person, cIdx) => {
+        row.forEach(val=>{
           const td = document.createElement("td");
-          td.dataset.row = rIdx; td.dataset.col = cIdx;
-
-          if(person){
-            const chip = document.createElement("div");
-            chip.className = "chip";
-            chip.draggable = true;
-            chip.innerHTML = `<span class="num">${person.no}</span><span class="name">${person.name}</span>`;
-            chip.addEventListener("dragstart", onDragStart);
-            chip.addEventListener("dragend", onDragEnd);
-            td.appendChild(chip);
-          } else {
-            td.classList.add("empty");
-            td.textContent = "（空位）";
-          }
-
-          // Drop 事件在 td 上
-          td.addEventListener("dragover", onDragOver);
-          td.addEventListener("dragleave", onDragLeave);
-          td.addEventListener("drop", onDrop);
-
+          td.textContent = val;
+          td.contentEditable = "true";
+          td.addEventListener("input", saveSeats);
           tr.appendChild(td);
         });
         seatBody.appendChild(tr);
       });
     }
-
-    /* ===== 拖曳邏輯：支援交換或移動到空位 ===== */
-    let dragFrom = null; // {row,col}
-    function onDragStart(e){
-      const td = e.target.closest("td");
-      dragFrom = { row: +td.dataset.row, col: +td.dataset.col };
-      e.dataTransfer.effectAllowed = "move";
-      // 自訂拖曳影像（可選）
-      const crt = e.target.cloneNode(true);
-      crt.style.position = "absolute"; crt.style.top = "-1000px"; crt.style.left = "-1000px";
-      document.body.appendChild(crt);
-      e.dataTransfer.setDragImage(crt, 40, 20);
-      setTimeout(()=>document.body.removeChild(crt), 0);
+    function readSeats(){
+      return Array.from(seatBody.querySelectorAll("tr"))
+        .map(tr => Array.from(tr.querySelectorAll("td")).map(td => td.textContent.trim()));
     }
-    function onDragEnd(){
-      dragFrom = null;
-      seatBody.querySelectorAll("td.drag-over").forEach(td => td.classList.remove("drag-over"));
+    function saveSeats(){ LS.set(todayKey("seats"), readSeats()); }
+    function loadSeats(){
+      let saved = LS.get(todayKey("seats"), null);
+      // 型狀檢查：必須是 5×6 字串矩陣
+      const shapeOk = Array.isArray(saved)
+        && saved.length === 5
+        && saved.every(r => Array.isArray(r) && r.length === 6);
+      const hasContent = shapeOk && saved.flat().some(cell => (cell ?? "").toString().trim() !== "");
+      // 不合規或全空 → 回退預設並覆寫 localStorage，避免座位表空白
+      if(!shapeOk || !hasContent){
+        saved = defaultSeats();
+        LS.set(todayKey("seats"), saved);
+      }
+      renderSeats(saved);
     }
-    function onDragOver(e){
-      e.preventDefault();
-      const td = e.currentTarget;
-      td.classList.add("drag-over");
-      e.dataTransfer.dropEffect = "move";
+    loadSeats();
+    // 一鍵重置（載入預設並覆寫 localStorage）
+    document.getElementById("btnResetSeats")?.addEventListener("click", ()=>{
+      const preset = defaultSeats();
+      LS.set(todayKey("seats"), preset);
+      renderSeats(preset);
+    });
+
+    /* ===== 右下角：全螢幕與縮放控制（含前綴相容性） ===== */
+    const fsTarget   = document.getElementById('viewport');
+    const btnFS      = document.getElementById('btnFS');
+    const iconEnter  = document.getElementById('iconEnter');
+    const iconExit   = document.getElementById('iconExit');
+    const btnZoomIn  = document.getElementById('btnZoomIn');
+    const btnZoomOut = document.getElementById('btnZoomOut');
+
+    function enterFullscreen(el){
+      if(el.requestFullscreen)       return el.requestFullscreen();
+      if(el.webkitRequestFullscreen) return el.webkitRequestFullscreen(); // Safari/舊 Chrome 前綴
+      if(el.msRequestFullscreen)     return el.msRequestFullscreen();     // 舊 Edge
     }
-    function onDragLeave(e){
-      e.currentTarget.classList.remove("drag-over");
+    function exitFullscreen(){
+      if(document.exitFullscreen)       return document.exitFullscreen();
+      if(document.webkitExitFullscreen) return document.webkitExitFullscreen();
+      if(document.msExitFullscreen)     return document.msExitFullscreen();
     }
-    function onDrop(e){
-      e.preventDefault();
-      const td = e.currentTarget;
-      td.classList.remove("drag-over");
-      if(!dragFrom) return;
-
-      const to = { row: +td.dataset.row, col: +td.dataset.col };
-      if(dragFrom.row === to.row && dragFrom.col === to.col) return; // 同一格，忽略
-
-      const grid = readGrid(); // 取得目前二維資料
-      const fromPerson = grid[dragFrom.row][dragFrom.col];
-      const toPerson   = grid[to.row][to.col];
-
-      // 交換或移動
-      grid[to.row][to.col] = fromPerson;
-      grid[dragFrom.row][dragFrom.col] = toPerson ?? null;
-
-      saveGrid(grid);
-      renderSeats(grid);
+    function isFullscreen(){
+      return !!(document.fullscreenElement
+             || document.webkitFullscreenElement
+             || document.msFullscreenElement);
     }
-
-    /* ===== 讀寫目前座位資料（2D array of {no,name} or null） ===== */
-    function readGrid(){
-      // 從 DOM 讀，避免狀態不一致
-      const rows = Array.from(seatBody.querySelectorAll("tr"));
-      return rows.map(tr => Array.from(tr.querySelectorAll("td")).map(td => {
-        const chip = td.querySelector(".chip");
-        if(!chip) return null;
-        const no = chip.querySelector(".num")?.textContent ?? "";
-        const name = chip.querySelector(".name")?.textContent ?? "";
-        return {no, name};
-      }));
+    function updateFSUI(){
+      const full = isFullscreen();
+      btnFS.setAttribute('aria-pressed', full ? 'true' : 'false');
+      iconEnter.style.display = full ? 'none' : 'block';
+      iconExit.style.display  = full ? 'block' : 'none';
     }
-    function saveGrid(grid){ LS.set(todayKey("seats-draggable"), grid); }
-    function loadGrid(){
-      const saved = LS.get(todayKey("seats-draggable"), null);
-      if(saved && Array.isArray(saved) && saved.length){
-        renderSeats(saved);
-      } else {
-        renderSeats(stringifyToObjects(defaultSeatStrings()));
+    async function toggleFullscreen(){
+      try{
+        if(!isFullscreen()) await enterFullscreen(fsTarget);
+        else await exitFullscreen();
+      }catch(err){
+        console.warn('Fullscreen error:', err);
+      }finally{
+        updateFSUI();
       }
     }
-
-    /* ===== 工具：清空／恢復預設 ===== */
-    document.getElementById("clearAll").addEventListener("click", ()=>{
-      const rows = seatBody.querySelectorAll("tr");
-      rows.forEach(tr => tr.querySelectorAll("td").forEach(td => td.innerHTML = ""));
-      const empty = Array.from({length:5},()=>Array.from({length:6},()=>null));
-      renderSeats(empty);
-      saveGrid(empty);
-    });
-    document.getElementById("resetDefault").addEventListener("click", ()=>{
-      const grid = stringifyToObjects(defaultSeatStrings());
-      renderSeats(grid);
-      saveGrid(grid);
-    });
-
-    /* 初始載入 */
-    loadGrid();
+    document.addEventListener('fullscreenchange',        updateFSUI);
+    document.addEventListener('webkitfullscreenchange',  updateFSUI);
+    document.addEventListener('msfullscreenchange',      updateFSUI);
+    btnFS.addEventListener('click', toggleFullscreen);
+    btnFS.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleFullscreen(); } });
+    btnZoomIn.addEventListener('click', ()=>{ userZoom = Math.min(MAX_ZOOM, +(userZoom + ZOOM_STEP).toFixed(2)); scaleStage(); });
+    btnZoomOut.addEventListener('click', ()=>{ userZoom = Math.max(MIN_ZOOM, +(userZoom - ZOOM_STEP).toFixed(2)); scaleStage(); });
   </script>
 </body>
 </html>
