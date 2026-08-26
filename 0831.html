@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>開學公告看板</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif;
+    }
+
+    #viewport {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* 1920×1080 設計底板 */
+    #stage-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+
+    #stage {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      background: #000;
+    }
+
+    [contenteditable="true"]:focus {
+      outline: 2px dashed rgba(255,255,255,0.45);
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+
+    /* 右上：只顯示時間 */
+    .time-clock {
+      position: absolute;
+      top: 38px;
+      right: 78px;
+      min-width: 400px;
+      font-size: 88px;
+      line-height: 1;
+      text-align: right;
+      color: #fff;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      z-index: 3;
+    }
+
+    /* 行程區塊：縮小字體，整體上移，並與時間下方保持約 40px 間距 */
+    .schedule-item {
+      position: absolute;
+      color: #fff;
+      font-size: 54px;
+      line-height: 1.18;
+      font-weight: 400;
+      white-space: pre-wrap;
+      padding: 4px 8px;
+      border-radius: 10px;
+      box-sizing: border-box;
+      transition: background-color .2s, color .2s;
+      z-index: 1;
+    }
+
+    /* 第一段：放在時間欄位下方約 40px 的視覺高度 */
+    #item1 {
+      left: 85px;
+      top: 168px;
+      width: 1710px;
+    }
+
+    /* 第二段：上移，避免碰到表格 */
+    #item2 {
+      left: 85px;
+      top: 378px;
+      width: 1260px;
+    }
+
+    /* 第三段：離校 */
+    #item3 {
+      left: 85px;
+      top: 515px;
+      width: 400px;
+    }
+
+    /* 當前時段：黃底紅字 */
+    .schedule-item.active {
+      background: #EAFA50;
+      color: #EC4E1C;
+    }
+
+    
+
+    /* 右下表格區：往下一點，避免遮到行程 */
+    .seat-area {
+      position: absolute;
+      right: 52px;
+      top: 450px;
+      width: 1112px;
+      z-index: 2;
+    }
+
+    .seat-header {
+      background: #4d76bf;
+      color: #fff;
+      text-align: center;
+      font-size: 72px;
+      line-height: 1.15;
+      padding: 12px 0 10px;
+      border: 2px solid rgba(255,255,255,0.72);
+      border-bottom: none;
+      box-sizing: border-box;
+    }
+
+    table.seat-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      color: #111;
+      font-size: 42px;
+      background: rgb(198, 203, 219);
+    }
+
+    .seat-table td {
+      border: 2px solid rgba(255,255,255,0.72);
+      padding: 10px 14px;
+      height: 58px;
+      text-align: center;
+      vertical-align: middle;
+      background: rgb(203, 206, 219);
+      box-sizing: border-box;
+    }
+
+    .seat-table tr:nth-child(odd) td {
+      background: rgb(187, 192, 210);
+    }
+
+    /* 右下控制列 */
+    .float-controls {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      z-index: 9999;
+      background: rgba(17, 24, 39, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 12px;
+      padding: 8px 10px;
+      backdrop-filter: blur(4px);
+    }
+
+    .fc-btn {
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      font-size: 22px;
+    }
+
+    .fc-btn:hover {
+      background: rgba(30, 41, 59, 0.96);
+    }
+
+    .fc-label {
+      min-width: 52px;
+      text-align: right;
+      font-size: 14px;
+      color: #cbd5e1;
+      padding: 0 4px;
+    }
+
+    .icon {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage-wrap">
+      <div id="stage">
+        <!-- 右上時間 -->
+        <div class="time-clock" id="clock">00:00:00</div>
+
+        <!-- 行程 -->
+        <div class="schedule-item" id="item1" contenteditable="true">7:30～8:15 ①收取暑假生活需知 ②聯絡簿抄課表 ③發書寫姓名 </div>
+
+        <div class="schedule-item" id="item2" contenteditable="true">8:25～9:10 操場開學典禮（下雨到飛揚館）</div>
+
+        <div class="schedule-item" id="item3" contenteditable="true">9:20～10:05 
+①幹部討論 
+②打掃工作分配 
+③抬餐工作分配 
+④榮譽卡 </div>
+
+        
+
+        <!-- 右下表格 -->
+        <div class="seat-area">
+          <div class="seat-header" contenteditable="true">黑板</div>
+          <table class="seat-table">
+            <tbody>
+             
+<tr>
+    <td> </td>
+    <td> 周欣喬</td>
+    <td> 黃智鴻</td>
+    <td> 陳廷碩</td>
+    <td> 高詰翔</td>
+    <td>黃  翊 </td>
+    <td> 李祖瑒</td>
+  </tr>
+
+  <tr>
+    <td> 洪子恩</td>
+    <td> 趙若晴</td>
+    <td> 劉宸宇</td>
+    <td> 王若蘅</td>
+    <td> 徐譽澄</td>
+    <td> 李宥恩</td>
+    <td> 簡鈺諠</td>
+  </tr>
+
+  <tr>
+    <td> 古紹伯</td>
+    <td> 王玟錦</td>
+    <td> 蘇昱瑋</td>
+    <td> 胡芯瑜</td>
+    <td> 王予彤</td>
+    <td> 簡品嫻</td>
+    <td> 李宜宸</td>
+  </tr>
+
+  <tr>
+    <td> 沈鈺叡</td>
+    <td> 謝采縈</td>
+    <td> 黃恩加</td>
+    <td> 林思翰</td>
+    <td> 陳宥嘉</td>
+    <td> 張祐綺</td>
+    <td> 柯宥廷</td>
+  </tr>
+
+  <tr>
+    <td> 曾心澤</td>
+    <td> 洪語宸</td>
+    <td> 楊依穎</td>
+    <td> 林哲旭</td>
+    <td> 魏以恩</td>
+    <td> 吳以攸</td>
+    <td> </td>
+  </tr>
+
+  
+
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右下控制 -->
+  <div class="float-controls" role="group" aria-label="視窗控制">
+    <button class="fc-btn" id="btnFS" aria-label="全螢幕">
+      <svg class="icon" id="iconEnter" viewBox="0 0 24 24">
+        <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/>
+      </svg>
+      <svg class="icon" id="iconExit" viewBox="0 0 24 24" style="display:none;">
+        <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/>
+      </svg>
+      <span class="visually-hidden">全螢幕</span>
+    </button>
+    <button class="fc-btn" id="btnZoomOut" aria-label="縮小">−</button>
+    <span class="fc-label" id="zoomLabel">100%</span>
+    <button class="fc-btn" id="btnZoomIn" aria-label="放大">＋</button>
+  </div>
+
+  <script>
+    let userZoom = 1.0;
+    const ZOOM_STEP = 0.1;
+    const MIN_ZOOM = 0.6;
+    const MAX_ZOOM = 2.0;
+
+    function scaleStage() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const sw = 1920;
+      const sh = 1080;
+
+      let baseScale = vh / sh;
+      if (sw * baseScale > vw) {
+        baseScale = Math.min(vw / sw, vh / sh);
+      }
+
+      const finalScale = baseScale * userZoom;
+      const tx = (vw - sw * finalScale) / 2;
+      const ty = (vh - sh * finalScale) / 2;
+
+      const wrap = document.getElementById("stage-wrap");
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${finalScale})`;
+      document.getElementById("zoomLabel").textContent = `${Math.round(userZoom * 100)}%`;
+    }
+
+    window.addEventListener("resize", scaleStage);
+    window.addEventListener("orientationchange", scaleStage);
+    scaleStage();
+
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, "0");
+      const m = String(now.getMinutes()).padStart(2, "0");
+      const s = String(now.getSeconds()).padStart(2, "0");
+      document.getElementById("clock").textContent = `${h}:${m}:${s}`;
+      updateScheduleHighlight(now);
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    function minutes(h, m) {
+      return h * 60 + m;
+    }
+
+    function updateScheduleHighlight(now) {
+      const current = minutes(now.getHours(), now.getMinutes());
+      const item1 = document.getElementById("item1");
+      const item2 = document.getElementById("item2");
+      item1.classList.remove("active");
+      item2.classList.remove("active");
+
+      if (current >= minutes(8, 30) && current <= minutes(9, 0)) {
+        item1.classList.add("active");
+      }
+
+      if (current >= minutes(9, 0) && current <= minutes(10, 12)) {
+        item2.classList.add("active");
+      }
+    }
+
+    const fsTarget = document.getElementById('viewport');
+    const btnFS = document.getElementById('btnFS');
+    const iconEnter = document.getElementById('iconEnter');
+    const iconExit = document.getElementById('iconExit');
+    const btnZoomIn = document.getElementById('btnZoomIn');
+    const btnZoomOut = document.getElementById('btnZoomOut');
+
+    function enterFullscreen(el) {
+      if (el.requestFullscreen) return el.requestFullscreen();
+      if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+      if (el.msRequestFullscreen) return el.msRequestFullscreen();
+    }
+
+    function exitFullscreen() {
+      if (document.exitFullscreen) return document.exitFullscreen();
+      if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+      if (document.msExitFullscreen) return document.msExitFullscreen();
+    }
+
+    function isFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+    }
+
+    function updateFSUI() {
+      const full = isFullscreen();
+      iconEnter.style.display = full ? 'none' : 'block';
+      iconExit.style.display = full ? 'block' : 'none';
+    }
+
+    async function toggleFullscreen() {
+      try {
+        if (!isFullscreen()) {
+          await enterFullscreen(fsTarget);
+        } else {
+          await exitFullscreen();
+        }
+      } catch (err) {
+        console.warn('Fullscreen error:', err);
+      } finally {
+        updateFSUI();
+      }
+    }
+
+    document.addEventListener('fullscreenchange', updateFSUI);
+    document.addEventListener('webkitfullscreenchange', updateFSUI);
+    document.addEventListener('msfullscreenchange', updateFSUI);
+    btnFS.addEventListener('click', toggleFullscreen);
+
+    btnZoomIn.addEventListener('click', () => {
+      userZoom = Math.min(MAX_ZOOM, +(userZoom + ZOOM_STEP).toFixed(2));
+      scaleStage();
+    });
+
+    btnZoomOut.addEventListener('click', () => {
+      userZoom = Math.max(MIN_ZOOM, +(userZoom - ZOOM_STEP).toFixed(2));
+      scaleStage();
+    });
+  </script>
+</body>
+</html>
