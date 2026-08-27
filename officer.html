@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>班級幹部</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { margin:0; padding:0; background:#000; color:#fff; height:100%; overflow:hidden; }
+    body { font-family:"Microsoft JhengHei","Noto Sans TC",system-ui,-apple-system,sans-serif; }
+
+    #viewport { position:relative; width:100vw; height:100vh; }
+    #stage-wrap { position:absolute; left:0; top:0; width:1920px; height:1080px; transform-origin:top left; }
+    #stage {
+      position:absolute; inset:0;
+      display:grid; grid-template-rows:auto 1fr;
+      padding:40px 60px;
+    }
+
+    .topbar {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:16px; margin-bottom:24px;
+    }
+    .title { font-size:40px; letter-spacing:.06em; font-weight:700; }
+    .tools { display:flex; gap:10px; }
+    .btn {
+      font-size:18px; padding:10px 14px; border-radius:10px;
+      background:#111827; color:#fff; border:1px solid #2b3b69; cursor:pointer;
+    }
+    .btn:hover { background:#1f2937; }
+
+    .table-wrap { overflow:auto; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    thead th {
+      background:#3a66b3; color:#fff; font-size:42px; padding:16px 0;
+      border:1px solid #cbd5e1; text-align:center;
+    }
+    tbody td {
+      font-size:28px; padding:16px; text-align:center; position:relative;
+      border:1px solid #3a4660; background:rgba(255,255,255,.06);
+      min-width:140px; height:96px;
+    }
+    tbody tr:nth-child(even) td { background:rgba(255,255,255,.12); }
+
+    .chip {
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      background:rgba(17,24,39,.9); border:1px solid #2b3b69; border-radius:12px;
+      padding:10px 14px; cursor:grab; user-select:none;
+    }
+    .chip:active { cursor:grabbing; }
+    .num { font-weight:800; font-size:30px; letter-spacing:.02em; }
+    .name { font-size:44px; letter-spacing:.02em; }
+
+    /* 指定職務名稱以橘紅色顯示 */
+    .name.position {
+      color:#ff4f1f;
+      font-weight:800;
+      text-shadow:0 0 1px rgba(255,79,31,.35);
+    }
+
+    td.drag-over { outline:3px dashed #60a5fa; }
+    td.empty { color:#888; }
+    .desk { font-weight:700; letter-spacing:.06em; }
+    .hint { margin-top:10px; color:#9ca3af; font-size:16px; }
+  </style>
+</head>
+<body>
+  <div id="viewport">
+    <div id="stage-wrap">
+      <div id="stage">
+        <div class="topbar">
+          <div class="title">班級幹部</div>
+          <div class="tools">
+            <button class="btn" id="resetDefault">恢復預設（載入投影片座位）</button>
+            <button class="btn" id="clearAll">清空全表</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="seatTable">
+            <thead>
+              <tr><th colspan="7" class="desk">班級幹部</th></tr>
+            </thead>
+            <tbody id="seatBody"></tbody>
+          </table>
+          <div class="hint">提示：用滑鼠拖曳內容到其他位置；手機可長按拖動（視瀏覽器支援）。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function scaleStage() {
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const sw = 1920, sh = 1080;
+      let scale = vh / sh;
+      if (sw * scale > vw) scale = Math.min(vw / sw, vh / sh);
+      const wrap = document.getElementById("stage-wrap");
+      const tx = (vw - sw * scale) / 2;
+      const ty = (vh - sh * scale) / 2;
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    }
+    window.addEventListener("resize", scaleStage);
+    window.addEventListener("orientationchange", scaleStage);
+    scaleStage();
+
+    function toYMD(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    const todayKey = part => `${part}:${toYMD(new Date())}`;
+    const LS = {
+      get(k, fallback) {
+        try {
+          const v = localStorage.getItem(k);
+          return v === null ? fallback : JSON.parse(v);
+        } catch {
+          return fallback;
+        }
+      },
+      set(k, v) {
+        localStorage.setItem(k, JSON.stringify(v));
+      }
+    };
+
+    const positionNames = new Set([
+      "班長", "副班長", "學藝", "風紀", "輔導", "總務", "資訊", "環保",
+      "作業登寫", "圖書", "衛生內", "衛生外", "抬飯", "菜＋餐具", "菜＋豆奶", "湯"
+    ]);
+
+    function defaultSeatStrings() {
+      return [
+        ["班長", "王予彤", "副班長", "高詰翔", "學藝", "胡芯瑜", "王玟錦"],
+        ["風紀", "陳宥嘉", "魏以恩", "輔導", "古紹伯", "總務", "劉宸宇"],
+        ["資訊", "簡品嫻", "環保", "王若蘅", "李宥恩", "作業登寫", ""],
+        ["圖書", "吳以攸", "洪子恩", "衛生內", "曾心澤", "衛生外", "林哲旭"],
+        ["抬飯", "", "", "菜＋餐具", "", "", "陳廷碩"],
+        ["菜＋豆奶", "", "", "湯", "趙若晴", "黃翊", "李祖瑒"],
+        ["沈鈺叡", "謝采縈", "黃恩加", "洪語宸", "蘇昱瑋", "張祐綺", "柯宥廷"],
+        ["簡鈺諠", "周欣喬", "楊依穎", "黃智鴻", "徐譽澄", "李宜宸", "林思翰"]
+      ];
+    }
+
+    function stringifyToObjects(grid) {
+      return grid.map(row => row.map(cell => {
+        const s = (cell || "").trim();
+        if (!s) return null;
+        const m = s.match(/^(\d+)\s*(.+)$/);
+        return m ? { no:m[1], name:m[2] } : { no:"", name:s };
+      }));
+    }
+
+    const seatBody = document.getElementById("seatBody");
+
+    function renderSeats(data) {
+      seatBody.innerHTML = "";
+
+      data.forEach((row, rIdx) => {
+        const tr = document.createElement("tr");
+
+        row.forEach((person, cIdx) => {
+          const td = document.createElement("td");
+          td.dataset.row = rIdx;
+          td.dataset.col = cIdx;
+
+          if (person) {
+            const chip = document.createElement("div");
+            chip.className = "chip";
+            chip.draggable = true;
+
+            const numSpan = document.createElement("span");
+            numSpan.className = "num";
+            numSpan.textContent = person.no || "";
+
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "name";
+            nameSpan.textContent = person.name || "";
+
+            if (positionNames.has((person.name || "").trim())) {
+              nameSpan.classList.add("position");
+            }
+
+            chip.appendChild(numSpan);
+            chip.appendChild(nameSpan);
+            chip.addEventListener("dragstart", onDragStart);
+            chip.addEventListener("dragend", onDragEnd);
+            td.appendChild(chip);
+          } else {
+            td.classList.add("empty");
+            td.textContent = "（空位）";
+          }
+
+          td.addEventListener("dragover", onDragOver);
+          td.addEventListener("dragleave", onDragLeave);
+          td.addEventListener("drop", onDrop);
+          tr.appendChild(td);
+        });
+
+        seatBody.appendChild(tr);
+      });
+    }
+
+    let dragFrom = null;
+
+    function onDragStart(e) {
+      const td = e.target.closest("td");
+      dragFrom = { row:+td.dataset.row, col:+td.dataset.col };
+      e.dataTransfer.effectAllowed = "move";
+
+      const crt = e.target.cloneNode(true);
+      crt.style.position = "absolute";
+      crt.style.top = "-1000px";
+      crt.style.left = "-1000px";
+      document.body.appendChild(crt);
+      e.dataTransfer.setDragImage(crt, 40, 20);
+      setTimeout(() => document.body.removeChild(crt), 0);
+    }
+
+    function onDragEnd() {
+      dragFrom = null;
+      seatBody.querySelectorAll("td.drag-over").forEach(td => td.classList.remove("drag-over"));
+    }
+
+    function onDragOver(e) {
+      e.preventDefault();
+      e.currentTarget.classList.add("drag-over");
+      e.dataTransfer.dropEffect = "move";
+    }
+
+    function onDragLeave(e) {
+      e.currentTarget.classList.remove("drag-over");
+    }
+
+    function onDrop(e) {
+      e.preventDefault();
+      const td = e.currentTarget;
+      td.classList.remove("drag-over");
+      if (!dragFrom) return;
+
+      const to = { row:+td.dataset.row, col:+td.dataset.col };
+      if (dragFrom.row === to.row && dragFrom.col === to.col) return;
+
+      const grid = readGrid();
+      const fromPerson = grid[dragFrom.row][dragFrom.col];
+      const toPerson = grid[to.row][to.col];
+      grid[to.row][to.col] = fromPerson;
+      grid[dragFrom.row][dragFrom.col] = toPerson ?? null;
+
+      saveGrid(grid);
+      renderSeats(grid);
+    }
+
+    function readGrid() {
+      const rows = Array.from(seatBody.querySelectorAll("tr"));
+      return rows.map(tr => Array.from(tr.querySelectorAll("td")).map(td => {
+        const chip = td.querySelector(".chip");
+        if (!chip) return null;
+        const no = chip.querySelector(".num")?.textContent ?? "";
+        const name = chip.querySelector(".name")?.textContent ?? "";
+        return { no, name };
+      }));
+    }
+
+    function saveGrid(grid) {
+      LS.set(todayKey("officer-draggable"), grid);
+    }
+
+    function loadGrid() {
+      const saved = LS.get(todayKey("officer-draggable"), null);
+      if (saved && Array.isArray(saved) && saved.length === 8 && saved.every(row => Array.isArray(row) && row.length === 7)) {
+        renderSeats(saved);
+      } else {
+        renderSeats(stringifyToObjects(defaultSeatStrings()));
+      }
+    }
+
+    document.getElementById("clearAll").addEventListener("click", () => {
+      const empty = Array.from({ length:8 }, () => Array.from({ length:7 }, () => null));
+      renderSeats(empty);
+      saveGrid(empty);
+    });
+
+    document.getElementById("resetDefault").addEventListener("click", () => {
+      const grid = stringifyToObjects(defaultSeatStrings());
+      renderSeats(grid);
+      saveGrid(grid);
+    });
+
+    loadGrid();
+  </script>
+</body>
+</html>
