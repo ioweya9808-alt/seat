@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>清潔工作</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+    }
+
+    #viewport {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    #stage-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1920px;
+      height: 1080px;
+      transform-origin: top left;
+    }
+
+    #stage {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      padding: 40px 60px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .title {
+      font-size: 40px;
+      letter-spacing: .06em;
+      font-weight: 700;
+    }
+
+    .tools {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: 1px solid #2b3b69;
+      border-radius: 10px;
+      background: #111827;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: #1f2937; }
+
+    .table-wrap {
+      min-height: 0;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    thead th {
+      padding: 16px 0;
+      border: 1px solid #cbd5e1;
+      background: #3a66b3;
+      color: #fff;
+      text-align: center;
+      font-size: 42px;
+    }
+
+    tbody td {
+      min-width: 140px;
+      height: 86px;
+      padding: 8px;
+      border: 1px solid #3a4660;
+      background: rgba(255,255,255,.06);
+      text-align: center;
+      position: relative;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: rgba(255,255,255,.12);
+    }
+
+    .chip {
+      display: inline-flex;
+      max-width: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 1px solid #2b3b69;
+      border-radius: 12px;
+      background: rgba(17,24,39,.9);
+      cursor: grab;
+      user-select: none;
+    }
+
+    .chip:active { cursor: grabbing; }
+
+    .num {
+      font-size: 26px;
+      font-weight: 800;
+    }
+
+    .name {
+      font-size: 40px;
+      line-height: 1.15;
+      letter-spacing: .01em;
+      overflow-wrap: anywhere;
+    }
+
+    .name.position {
+      color: #ff4f1f;
+      font-weight: 800;
+      text-shadow: 0 0 1px rgba(255,79,31,.35);
+    }
+
+    td.drag-over { outline: 3px dashed #60a5fa; }
+    td.empty { color: #888; font-size: 22px; }
+    .desk { font-weight: 700; letter-spacing: .06em; }
+    .hint { margin-top: 10px; color: #9ca3af; font-size: 16px; }
+  </style>
+</head>
+
+<body>
+  <div id="viewport">
+    <div id="stage-wrap">
+      <div id="stage">
+        <div class="topbar">
+          <div class="title">清潔工作</div>
+          <div class="tools">
+            <button class="btn" id="fullscreenBtn" type="button">全螢幕</button>
+            <button class="btn" id="resetDefault" type="button">恢復預設</button>
+            <button class="btn" id="clearAll" type="button">清空全表</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="seatTable">
+            <thead>
+              <tr><th colspan="7" class="desk">清潔工作</th></tr>
+            </thead>
+            <tbody id="seatBody"></tbody>
+          </table>
+          <div class="hint">提示：用滑鼠拖曳內容到其他位置；觸控裝置的拖曳支援依瀏覽器而定。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const ROWS = 9;
+    const COLS = 7;
+    const STORAGE_KEY = "cleanup-draggable-v2";
+
+    function scaleStage() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const sw = 1920;
+      const sh = 1080;
+      const scale = Math.min(vw / sw, vh / sh);
+      const wrap = document.getElementById("stage-wrap");
+      const tx = (vw - sw * scale) / 2;
+      const ty = (vh - sh * scale) / 2;
+      wrap.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    }
+
+    window.addEventListener("resize", scaleStage);
+    window.addEventListener("orientationchange", scaleStage);
+
+    const positionNames = new Set([
+      "走廊", "走廊前窗", "左側前窗", "走廊後窗", "左側後窗", "黑板","講台",
+      "掃1、2排", "拖1、2排", "掃3、4排", "掃5、6排", "掃7排打菜區",
+      "拖3、4排", "拖5、6排", "拖把水桶", "辦公室走廊",
+      "辦公室健康中心走廊", "補校辦公室窗戶", "補校辦公室回收箱窗戶",
+      "特教辦公室窗戶", "特教回收箱窗戶", "特教辦公室垃圾及回收",
+      "特教辦公室地面", "櫃子講桌電腦桌餐桌", "教室垃圾桶及回收",
+      "掃具室及洗手台","健康中心地面",,"拖打菜區地面","健康中心走廊", "補校辦公室地面"    ]);
+
+    function defaultSeatStrings() {
+      return [
+        ["走廊", "走廊前窗", "左側前窗", "走廊後窗", "左側後窗", "黑板", "講台"],
+        ["王予彤", "高詰翔", "簡品嫻", "林思翰", "李宜宸", "劉宸宇", "古紹伯"],
+        ["掃1、2排", "掃3、4排", "掃5、6排", "掃7排打菜區", "拖1、2排", "拖3、4排", "拖5、6排"],
+        ["陳宥嘉", "李祖瑒", "黃翊", "胡芯瑜", "魏以恩", "張祐綺", "洪語宸"],
+        ["拖把水桶", "櫃子講桌電腦桌餐桌", "教室垃圾桶及回收", "拖打菜區地面", "掃具室及洗手台", "健康中心走廊", "健康中心地面"],
+        ["洪子恩", "楊依穎", "王若蘅", "謝采縈", "趙若晴", "蘇昱瑋", "沈鈺叡"],
+        ["特教辦公室地面", "補校辦公室地面", "特教辦公室垃圾及回收", "特教回收箱窗戶", "補校辦公室回收箱窗戶", "辦公室走廊", "特教辦公室窗戶"],
+        ["周欣喬", "王玟錦", "李宥恩", "黃恩加", "吳以攸", "陳廷碩", "黃智鴻"],
+        ["", "", "柯宥廷", "", "徐譽澄", "曾心澤", "林哲旭"]
+      ];
+    }
+
+    function stringsToObjects(grid) {
+      return grid.map(row => row.map(cell => {
+        const text = String(cell || "").trim();
+        if (!text) return null;
+        const match = text.match(/^(\d+)\s*(.+)$/);
+        return match
+          ? { no: match[1], name: match[2] }
+          : { no: "", name: text };
+      }));
+    }
+
+    function isValidGrid(grid) {
+      return Array.isArray(grid) &&
+        grid.length === ROWS &&
+        grid.every(row => Array.isArray(row) && row.length === COLS);
+    }
+
+    function saveGrid(grid) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(grid));
+      } catch (error) {
+        console.warn("無法儲存資料：", error);
+      }
+    }
+
+    function loadGridData() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (isValidGrid(saved)) return saved;
+      } catch (error) {
+        console.warn("舊儲存資料無法讀取，已載入預設資料。", error);
+      }
+      return stringsToObjects(defaultSeatStrings());
+    }
+
+    const seatBody = document.getElementById("seatBody");
+    let currentGrid = loadGridData();
+    let dragFrom = null;
+
+    function renderSeats(grid) {
+      seatBody.innerHTML = "";
+
+      grid.forEach((row, rowIndex) => {
+        const tr = document.createElement("tr");
+
+        row.forEach((person, colIndex) => {
+          const td = document.createElement("td");
+          td.dataset.row = rowIndex;
+          td.dataset.col = colIndex;
+
+          if (person) {
+            const chip = document.createElement("div");
+            chip.className = "chip";
+            chip.draggable = true;
+
+            const numSpan = document.createElement("span");
+            numSpan.className = "num";
+            numSpan.textContent = person.no || "";
+
+            const nameSpan = document.createElement("span");
+            nameSpan.className = "name";
+            nameSpan.textContent = person.name || "";
+
+            if (positionNames.has((person.name || "").trim())) {
+              nameSpan.classList.add("position");
+            }
+
+            chip.appendChild(numSpan);
+            chip.appendChild(nameSpan);
+            chip.addEventListener("dragstart", onDragStart);
+            chip.addEventListener("dragend", onDragEnd);
+            td.appendChild(chip);
+          } else {
+            td.className = "empty";
+            td.textContent = "（空位）";
+          }
+
+          td.addEventListener("dragover", onDragOver);
+          td.addEventListener("dragleave", onDragLeave);
+          td.addEventListener("drop", onDrop);
+          tr.appendChild(td);
+        });
+
+        seatBody.appendChild(tr);
+      });
+    }
+
+    function onDragStart(event) {
+      const td = event.target.closest("td");
+      dragFrom = {
+        row: Number(td.dataset.row),
+        col: Number(td.dataset.col)
+      };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `${dragFrom.row},${dragFrom.col}`);
+    }
+
+    function onDragEnd() {
+      dragFrom = null;
+      seatBody.querySelectorAll("td.drag-over")
+        .forEach(td => td.classList.remove("drag-over"));
+    }
+
+    function onDragOver(event) {
+      event.preventDefault();
+      event.currentTarget.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    }
+
+    function onDragLeave(event) {
+      event.currentTarget.classList.remove("drag-over");
+    }
+
+    function onDrop(event) {
+      event.preventDefault();
+      const td = event.currentTarget;
+      td.classList.remove("drag-over");
+      if (!dragFrom) return;
+
+      const to = {
+        row: Number(td.dataset.row),
+        col: Number(td.dataset.col)
+      };
+
+      if (dragFrom.row === to.row && dragFrom.col === to.col) return;
+
+      const temp = currentGrid[to.row][to.col];
+      currentGrid[to.row][to.col] = currentGrid[dragFrom.row][dragFrom.col];
+      currentGrid[dragFrom.row][dragFrom.col] = temp;
+
+      saveGrid(currentGrid);
+      renderSeats(currentGrid);
+      dragFrom = null;
+    }
+
+    document.getElementById("clearAll").addEventListener("click", () => {
+      currentGrid = Array.from(
+        { length: ROWS },
+        () => Array.from({ length: COLS }, () => null)
+      );
+      saveGrid(currentGrid);
+      renderSeats(currentGrid);
+    });
+
+    document.getElementById("resetDefault").addEventListener("click", () => {
+      currentGrid = stringsToObjects(defaultSeatStrings());
+      saveGrid(currentGrid);
+      renderSeats(currentGrid);
+    });
+
+    const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+    fullscreenBtn.addEventListener("click", async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (error) {
+        console.warn("目前瀏覽器無法切換全螢幕：", error);
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      fullscreenBtn.textContent = document.fullscreenElement ? "離開全螢幕" : "全螢幕";
+      setTimeout(scaleStage, 50);
+    });
+
+    scaleStage();
+    renderSeats(currentGrid);
+  </script>
+</body>
+</html>
