@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>社團選社</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif}
+#viewport{position:fixed;inset:0;overflow:hidden;background:#000}
+#stage-wrap{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:top left}
+#stage{width:1920px;height:1080px;padding:20px;display:flex;flex-direction:column;background:#000}
+.topbar{height:90px;flex:0 0 90px;display:flex;align-items:center;justify-content:space-between;padding:0 10px 12px;gap:16px}
+.title{font-size:48px;font-weight:700;white-space:nowrap}
+.tools{display:flex;gap:12px;white-space:nowrap}
+.btn{padding:12px 20px;border:1px solid #4165bd;border-radius:10px;background:#2348aa;color:#fff;font-size:22px;cursor:pointer}
+.btn:active{background:#3567df}
+.table-wrap{flex:1;min-height:0;overflow:hidden}
+table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed}
+thead th{height:88px;background:#446bb0;border:1px solid #90a7d3;color:#fff;font-size:52px;font-weight:700;letter-spacing:.08em}
+tbody tr{height:10%}
+tbody td{padding:6px;border:1px solid #303b52;background:#0b0f16;text-align:center;vertical-align:middle;overflow:hidden}
+tbody tr:nth-child(even) td{background:#202020}
+.chip{width:96%;height:90%;margin:auto;padding:5px 8px;display:flex;align-items:center;justify-content:center;border:1px solid #24406f;border-radius:12px;background:#101827;cursor:grab;user-select:none;overflow:hidden}
+.text{font-size:36px;line-height:1.12;text-align:center;overflow-wrap:anywhere}
+.text.activity{color:#ff4f1f;font-weight:800}
+.empty{color:#888;font-size:25px}
+td.drag-over{outline:4px dashed #6eb5ff;outline-offset:-4px}
+.hint{height:27px;flex:0 0 27px;color:#aaa;font-size:15px;line-height:27px;padding-left:8px}
+#rotateHint{display:none;position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;padding:8px 14px;border-radius:20px;background:rgba(20,30,50,.92);font-size:14px;white-space:nowrap}
+@media (orientation:portrait) and (max-width:800px){#rotateHint{display:block}}
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="stage-wrap">
+    <main id="stage">
+      <header class="topbar">
+        <div class="title">社團選社（拖曳交換 / 自動儲存）</div>
+        <div class="tools">
+          <button class="btn" id="fullscreenBtn" type="button">全螢幕</button>
+          <button class="btn" id="resetDefault" type="button">恢復預設</button>
+          <button class="btn" id="clearAll" type="button">清空全表</button>
+        </div>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th colspan="7">社團選社</th></tr></thead>
+          <tbody id="gridBody"></tbody>
+        </table>
+      </div>
+      <div class="hint">提示：可用滑鼠拖曳內容交換位置；觸控拖曳支援依瀏覽器而定。</div>
+    </main>
+  </div>
+</div>
+<div id="rotateHint">橫向觀看可獲得較大的表格</div>
+<script>
+"use strict";
+const DESIGN_W=1920, DESIGN_H=1080, ROWS=10, COLS=7;
+const STORAGE_KEY="club-selection-grid-v1";
+
+const defaultData=[
+  ["桌遊","創意手作","和諧粉彩藝術","拼布玩藝","拼豆編織","數字油畫","創客手作"],
+  ["王予彤","高詰翔","簡品嫻","林思翰","李宜宸","劉宸宇","古紹伯"],
+  ["園藝","好食廚房","聽故事學成語","吉他","造型氣球","魔術","美術繪畫"],
+  ["陳宥嘉","李祖瑒","黃翊","胡芯瑜","魏以恩","張祐綺","洪語宸"],
+  ["高爾夫球","桌球","跆拳道","熱舞","籃球","競技疊杯","世代志工"],
+  ["洪子恩","楊依穎","王若蘅","謝采縈","趙若晴","蘇昱瑋","沈鈺叡"],
+  ["童軍","醒獅","專題研究","青春i閱讀","文青","旅遊美語","程式設計"],
+  ["周欣喬","王玟錦","李宥恩","黃恩加","吳以攸","陳廷碩","黃智鴻"],
+  ["籃球校隊","自科","管樂","弦樂","合唱","羽球",""],
+  ["","","柯宥廷","","徐譽澄","曾心澤","林哲旭"]
+];
+
+const activityNames=new Set([
+  "桌遊","創意手作","和諧粉彩藝術","拼布玩藝","拼豆編織","數字油畫","創客手作",
+  "園藝","好食廚房","聽故事學成語","吉他","造型氣球","魔術","美術繪畫",
+  "高爾夫球","桌球","跆拳道","熱舞","籃球","競技疊杯","世代志工",
+  "童軍","醒獅","專題研究","青春i閱讀","文青","旅遊美語","程式設計",
+  "籃球校隊","自科","管樂","弦樂","合唱","羽球"
+]);
+
+function fitStage(){
+  const vv=window.visualViewport;
+  const vw=vv?vv.width:window.innerWidth;
+  const vh=vv?vv.height:window.innerHeight;
+  const scale=Math.min(vw/DESIGN_W,vh/DESIGN_H);
+  const x=Math.max(0,(vw-DESIGN_W*scale)/2)+(vv?vv.offsetLeft:0);
+  const y=Math.max(0,(vh-DESIGN_H*scale)/2)+(vv?vv.offsetTop:0);
+  document.getElementById("stage-wrap").style.transform=`translate(${x}px,${y}px) scale(${scale})`;
+}
+window.addEventListener("resize",fitStage);
+window.addEventListener("orientationchange",()=>setTimeout(fitStage,250));
+if(window.visualViewport){window.visualViewport.addEventListener("resize",fitStage);window.visualViewport.addEventListener("scroll",fitStage)}
+
+function cloneDefault(){return defaultData.map(row=>row.map(text=>text||""))}
+function validGrid(data){return Array.isArray(data)&&data.length===ROWS&&data.every(row=>Array.isArray(row)&&row.length===COLS)}
+function loadGrid(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));if(validGrid(saved))return saved}catch(e){}return cloneDefault()}
+function saveGrid(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(gridData))}catch(e){console.warn(e)}}
+
+let gridData=loadGrid();
+let dragFrom=null;
+const gridBody=document.getElementById("gridBody");
+
+function render(){
+  gridBody.innerHTML="";
+  gridData.forEach((row,r)=>{
+    const tr=document.createElement("tr");
+    row.forEach((text,c)=>{
+      const td=document.createElement("td");
+      td.dataset.row=r; td.dataset.col=c;
+      if(text){
+        const chip=document.createElement("div");
+        chip.className="chip"; chip.draggable=true;
+        const span=document.createElement("div");
+        span.className="text"+(activityNames.has(text)?" activity":"");
+        span.textContent=text;
+        chip.appendChild(span);
+        chip.addEventListener("dragstart",e=>{dragFrom={row:r,col:c};e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",`${r},${c}`)});
+        chip.addEventListener("dragend",()=>{dragFrom=null;document.querySelectorAll("td.drag-over").forEach(x=>x.classList.remove("drag-over"))});
+        td.appendChild(chip);
+      }else{
+        const empty=document.createElement("div");empty.className="empty";empty.textContent="（空位）";td.appendChild(empty);
+      }
+      td.addEventListener("dragover",e=>{e.preventDefault();td.classList.add("drag-over")});
+      td.addEventListener("dragleave",()=>td.classList.remove("drag-over"));
+      td.addEventListener("drop",e=>{
+        e.preventDefault();td.classList.remove("drag-over");if(!dragFrom)return;
+        const temp=gridData[r][c];gridData[r][c]=gridData[dragFrom.row][dragFrom.col];gridData[dragFrom.row][dragFrom.col]=temp;
+        dragFrom=null;saveGrid();render();
+      });
+      tr.appendChild(td);
+    });
+    gridBody.appendChild(tr);
+  });
+}
+
+document.getElementById("resetDefault").addEventListener("click",()=>{gridData=cloneDefault();saveGrid();render()});
+document.getElementById("clearAll").addEventListener("click",()=>{gridData=Array.from({length:ROWS},()=>Array(COLS).fill(""));saveGrid();render()});
+const fullscreenBtn=document.getElementById("fullscreenBtn");
+fullscreenBtn.addEventListener("click",async()=>{try{if(!document.fullscreenElement){await document.documentElement.requestFullscreen()}else{await document.exitFullscreen()}}catch(e){console.warn("無法切換全螢幕",e)}finally{setTimeout(fitStage,100)}});
+document.addEventListener("fullscreenchange",()=>{fullscreenBtn.textContent=document.fullscreenElement?"離開全螢幕":"全螢幕";setTimeout(fitStage,100)});
+
+fitStage();
+render();
+</script>
+</body>
+</html>
