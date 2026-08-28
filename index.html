@@ -2,450 +2,105 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
 <title>座位表</title>
-
 <style>
-
-*{
-    box-sizing:border-box;
-}
-
-html,
-body{
-    margin:0;
-    width:100%;
-    height:100dvh;
-    overflow:hidden;
-    background:#000;
-    color:#fff;
-    font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;
-}
-
-body{
-    display:flex;
-    flex-direction:column;
-}
-
-.topbar{
-    height:90px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:10px 20px;
-}
-
-.title{
-    font-size:clamp(30px,3vw,54px);
-    font-weight:700;
-}
-
-.tools{
-    display:flex;
-    gap:10px;
-}
-
-.btn{
-    padding:12px 20px;
-    font-size:22px;
-    border:none;
-    border-radius:12px;
-    background:#2348aa;
-    color:white;
-    cursor:pointer;
-}
-
-.btn:hover{
-    background:#3567df;
-}
-
-.desk{
-    text-align:center;
-    background:#446bb0;
-    font-size:clamp(36px,4vw,60px);
-    font-weight:bold;
-    padding:10px;
-    border-top:1px solid #90a7d3;
-    border-bottom:1px solid #90a7d3;
-}
-
-#seatGrid{
-    flex:1;
-
-    min-height:0;
-
-    display:grid;
-
-    grid-template-columns:
-    repeat(7,1fr);
-
-    grid-template-rows:
-    repeat(5,1fr);
-
-    gap:2px;
-
-    background:#3d4d74;
-}
-
-.seat{
-    background:#121a2b;
-
-    display:flex;
-    justify-content:center;
-    align-items:center;
-
-    padding:6px;
-}
-
-.chip{
-
-    width:96%;
-    height:94%;
-
-    border-radius:12px;
-
-    border:1px solid #254da6;
-
-    background:#06152d;
-
-    display:flex;
-    flex-direction:column;
-
-    justify-content:center;
-    align-items:center;
-
-    cursor:grab;
-
-    user-select:none;
-}
-
-.chip:active{
-    cursor:grabbing;
-}
-
-.num{
-    font-size:clamp(16px,1.3vw,24px);
-    font-weight:bold;
-}
-
-.name{
-    font-size:clamp(28px,2.6vw,42px);
-    text-align:center;
-    line-height:1.1;
-}
-
-.empty{
-    color:#888;
-    font-size:24px;
-}
-
-.drag-over{
-    outline:4px dashed #6eb5ff;
-}
-
-.hint{
-    height:30px;
-    line-height:30px;
-    padding-left:10px;
-    color:#aaa;
-    font-size:14px;
-}
-
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif}
+#viewport{position:fixed;inset:0;overflow:hidden;background:#000}
+#stage-wrap{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:top left}
+#stage{width:1920px;height:1080px;padding:20px;display:flex;flex-direction:column;background:#000}
+.topbar{height:92px;flex:0 0 92px;display:flex;justify-content:space-between;align-items:center;padding:0 10px 12px}
+.title{font-size:48px;font-weight:700;white-space:nowrap}
+.tools{display:flex;gap:12px;white-space:nowrap}
+.btn{padding:12px 20px;font-size:22px;border:1px solid #4165bd;border-radius:10px;background:#2348aa;color:#fff;cursor:pointer}
+.btn:active{background:#3567df}
+.desk{height:94px;flex:0 0 94px;display:flex;align-items:center;justify-content:center;background:#446bb0;border:1px solid #90a7d3;font-size:56px;font-weight:700}
+#seatGrid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(5,minmax(0,1fr));gap:2px;background:#3d4d74}
+.seat{min-width:0;min-height:0;padding:7px;display:flex;align-items:center;justify-content:center;background:#121a2b;overflow:hidden}
+.chip{width:96%;height:92%;padding:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #254da6;border-radius:12px;background:#06152d;cursor:grab;user-select:none;overflow:hidden}
+.num{font-size:25px;font-weight:700;line-height:1;white-space:nowrap}
+.name{margin-top:5px;font-size:42px;line-height:1.08;text-align:center;white-space:nowrap}
+.empty{color:#888;font-size:25px;white-space:nowrap}
+.drag-over{outline:4px dashed #6eb5ff;outline-offset:-4px}
+.hint{height:28px;flex:0 0 28px;padding-left:8px;color:#aaa;font-size:15px;line-height:28px}
+#rotateHint{display:none;position:fixed;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10;padding:8px 14px;border-radius:20px;background:rgba(20,30,50,.9);color:#fff;font-size:14px;white-space:nowrap}
+@media (orientation:portrait) and (max-width:800px){#rotateHint{display:block}}
 </style>
 </head>
-
 <body>
-
-<div class="topbar">
-
-    <div class="title">
-        座位表（拖曳交換 / 自動儲存）
-    </div>
-
-    <div class="tools">
-
-        <button class="btn" id="fullscreenBtn">
-            全螢幕
-        </button>
-
-        <button class="btn" id="resetDefault">
-            恢復預設
-        </button>
-
-        <button class="btn" id="clearAll">
-            清空全表
-        </button>
-
-    </div>
-
+<div id="viewport">
+  <div id="stage-wrap">
+    <main id="stage">
+      <header class="topbar">
+        <div class="title">座位表（拖曳交換 / 自動儲存）</div>
+        <div class="tools">
+          <button class="btn" id="fullscreenBtn" type="button">全螢幕</button>
+          <button class="btn" id="resetDefault" type="button">恢復預設</button>
+          <button class="btn" id="clearAll" type="button">清空全表</button>
+        </div>
+      </header>
+      <div class="desk">黑板</div>
+      <div id="seatGrid"></div>
+      <div class="hint">拖曳姓名即可交換座位</div>
+    </main>
+  </div>
 </div>
-
-<div class="desk">黑板</div>
-
-<div id="seatGrid"></div>
-
-<div class="hint">
-拖曳姓名即可交換座位
-</div>
-
+<div id="rotateHint">橫向觀看可獲得較大的座位表</div>
 <script>
+"use strict";
+const DESIGN_W=1920,DESIGN_H=1080;
+function fitStage(){
+  const vv=window.visualViewport;
+  const vw=vv?vv.width:window.innerWidth;
+  const vh=vv?vv.height:window.innerHeight;
+  const scale=Math.min(vw/DESIGN_W,vh/DESIGN_H);
+  const x=Math.max(0,(vw-DESIGN_W*scale)/2)+(vv?vv.offsetLeft:0);
+  const y=Math.max(0,(vh-DESIGN_H*scale)/2)+(vv?vv.offsetTop:0);
+  document.getElementById("stage-wrap").style.transform=`translate(${x}px,${y}px) scale(${scale})`;
+}
+window.addEventListener("resize",fitStage);
+window.addEventListener("orientationchange",()=>setTimeout(fitStage,250));
+if(window.visualViewport){window.visualViewport.addEventListener("resize",fitStage);window.visualViewport.addEventListener("scroll",fitStage)}
 
-const LS_KEY="seatGridData";
-
+const LS_KEY="seatGridData-v2";
 const defaultData=[
-["","05周欣喬","29黃智鴻","26陳廷碩","25高詰翔","30黃  翊","19李祖瑒"],
-["23洪子恩","27陳宥嘉","28黃恩加","15王若蘅","24徐譽澄","18李宥恩","14簡鈺諠"],
-["16古紹伯","02王玟錦","07胡芯瑜","20林思翰","11趙若晴","13簡品嫻","03李宜宸"],
-["04沈鈺叡","12謝采縈","01王予彤","31劉宸宇","33蘇昱瑋","08張祐綺","22柯宥廷"],
+["","05周欣喬","29黃智鴻","26陳廷碩","25高詰翔","30黃翊","19李祖揚"],
+["23洪子恩","27陳宥嘉","28黃恩加","15王若衡","24徐璽澄","18李宥恩","14簡鈺謹"],
+["16古紹伯","02王玟錦","07胡芯瑜","20林思翰","11趙若晴","13簡品婕","03李宜宸"],
+["04沈鈺睿","12謝采縈","01王予彤","31劉宸宇","33蘇昱瑾","08張祐綺","22柯宥廷"],
 ["09曾心澤","06洪語宸","10楊依穎","21林哲旭","32魏以恩","17吳以攸",""]
 ];
-
-function parseSeats(data){
-
-    return data.map(row=>
-
-        row.map(item=>{
-
-            if(!item) return null;
-
-            const m=item.match(/^(\d+)(.+)$/);
-
-            return {
-                no:m[1],
-                name:m[2]
-            };
-
-        })
-
-    );
-
-}
-
-function loadSeats(){
-
-    try{
-
-        const saved=
-        localStorage.getItem(LS_KEY);
-
-        if(saved){
-
-            return JSON.parse(saved);
-
-        }
-
-    }catch(e){}
-
-    return parseSeats(defaultData);
-
-}
-
-function saveSeats(data){
-
-    localStorage.setItem(
-        LS_KEY,
-        JSON.stringify(data)
-    );
-
-}
-
-let seatData=loadSeats();
-
-let dragSource=null;
-
+function parseSeats(data){return data.map(row=>row.map(item=>{const s=String(item||"").trim();if(!s)return null;const m=s.match(/^(\d+)(.+)$/);return m?{no:m[1],name:m[2].trim()}:{no:"",name:s}}))}
+function validGrid(data){return Array.isArray(data)&&data.length===5&&data.every(r=>Array.isArray(r)&&r.length===7)}
+function loadSeats(){try{const data=JSON.parse(localStorage.getItem(LS_KEY));if(validGrid(data))return data}catch(e){}return parseSeats(defaultData)}
+function saveSeats(data){try{localStorage.setItem(LS_KEY,JSON.stringify(data))}catch(e){console.warn(e)}}
+let seatData=loadSeats(),dragSource=null;
+const grid=document.getElementById("seatGrid");
 function render(){
-
-    const grid=
-    document.getElementById("seatGrid");
-
-    grid.innerHTML="";
-
-    seatData.forEach((row,r)=>{
-
-        row.forEach((person,c)=>{
-
-            const seat=
-            document.createElement("div");
-
-            seat.className="seat";
-
-            if(person){
-
-                const chip=
-                document.createElement("div");
-
-                chip.className="chip";
-
-                chip.draggable=true;
-
-                chip.innerHTML=`
-                    <div class="num">${person.no}</div>
-                    <div class="name">${person.name}</div>
-                `;
-
-                chip.addEventListener(
-                    "dragstart",
-                    ()=>{
-                        dragSource={
-                            row:r,
-                            col:c
-                        };
-                    }
-                );
-
-                seat.appendChild(chip);
-
-            }else{
-
-                seat.innerHTML=
-                '<div class="empty">（空位）</div>';
-
-            }
-
-            seat.addEventListener(
-                "dragover",
-                (e)=>{
-                    e.preventDefault();
-                    seat.classList.add("drag-over");
-                }
-            );
-
-            seat.addEventListener(
-                "dragleave",
-                ()=>{
-                    seat.classList.remove("drag-over");
-                }
-            );
-
-            seat.addEventListener(
-                "drop",
-                ()=>{
-
-                    seat.classList.remove("drag-over");
-
-                    if(!dragSource) return;
-
-                    const temp=
-                    seatData[r][c];
-
-                    seatData[r][c]=
-                    seatData[
-                        dragSource.row
-                    ][
-                        dragSource.col
-                    ];
-
-                    seatData[
-                        dragSource.row
-                    ][
-                        dragSource.col
-                    ]=temp;
-
-                    saveSeats(seatData);
-
-                    render();
-                }
-            );
-
-            grid.appendChild(seat);
-
-        });
-
-    });
-
+ grid.innerHTML="";
+ seatData.forEach((row,r)=>row.forEach((person,c)=>{
+  const seat=document.createElement("div");seat.className="seat";seat.dataset.row=r;seat.dataset.col=c;
+  if(person){const chip=document.createElement("div");chip.className="chip";chip.draggable=true;
+   const num=document.createElement("div");num.className="num";num.textContent=person.no||"";
+   const name=document.createElement("div");name.className="name";name.textContent=person.name||"";
+   chip.append(num,name);chip.addEventListener("dragstart",e=>{dragSource={row:r,col:c};e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",`${r},${c}`)});
+   chip.addEventListener("dragend",()=>{dragSource=null;document.querySelectorAll(".drag-over").forEach(el=>el.classList.remove("drag-over"))});seat.appendChild(chip)
+  }else{const empty=document.createElement("div");empty.className="empty";empty.textContent="（空位）";seat.appendChild(empty)}
+  seat.addEventListener("dragover",e=>{e.preventDefault();seat.classList.add("drag-over")});
+  seat.addEventListener("dragleave",()=>seat.classList.remove("drag-over"));
+  seat.addEventListener("drop",e=>{e.preventDefault();seat.classList.remove("drag-over");if(!dragSource)return;const temp=seatData[r][c];seatData[r][c]=seatData[dragSource.row][dragSource.col];seatData[dragSource.row][dragSource.col]=temp;dragSource=null;saveSeats(seatData);render()});
+  grid.appendChild(seat)
+ }))
 }
-
-document
-.getElementById("resetDefault")
-.onclick=()=>{
-
-    seatData=
-    parseSeats(defaultData);
-
-    saveSeats(seatData);
-
-    render();
-
-};
-
-document
-.getElementById("clearAll")
-.onclick=()=>{
-
-    seatData=
-    Array.from(
-        {length:5},
-        ()=>Array.from(
-            {length:7},
-            ()=>null
-        )
-    );
-
-    saveSeats(seatData);
-
-    render();
-
-};
-
-const fullscreenBtn =
-document.getElementById("fullscreenBtn");
-
-fullscreenBtn.onclick =
-async ()=>{
-
-    try{
-
-        if(!document.fullscreenElement){
-
-            await document.documentElement
-                .requestFullscreen();
-
-        }else{
-
-            await document.exitFullscreen();
-
-        }
-
-    }catch(err){
-
-        console.log(err);
-
-    }
-
-};
-
-document.addEventListener(
-    "fullscreenchange",
-    ()=>{
-
-        fullscreenBtn.textContent=
-        document.fullscreenElement
-        ? "離開全螢幕"
-        : "全螢幕";
-
-    }
-);
-
-document.addEventListener(
-    "click",
-    ()=>{
-
-        if(!document.fullscreenElement){
-
-            document.documentElement
-            .requestFullscreen()
-            .catch(()=>{});
-
-        }
-
-    },
-    {once:true}
-);
-
-render();
-
+document.getElementById("resetDefault").addEventListener("click",()=>{seatData=parseSeats(defaultData);saveSeats(seatData);render()});
+document.getElementById("clearAll").addEventListener("click",()=>{seatData=Array.from({length:5},()=>Array(7).fill(null));saveSeats(seatData);render()});
+const fullscreenBtn=document.getElementById("fullscreenBtn");
+fullscreenBtn.addEventListener("click",async()=>{try{if(!document.fullscreenElement){await document.documentElement.requestFullscreen()}else{await document.exitFullscreen()}}catch(e){console.warn("無法切換全螢幕",e)}finally{setTimeout(fitStage,100)}});
+document.addEventListener("fullscreenchange",()=>{fullscreenBtn.textContent=document.fullscreenElement?"離開全螢幕":"全螢幕";setTimeout(fitStage,100)});
+fitStage();render();
 </script>
-
 </body>
 </html>
