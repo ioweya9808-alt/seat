@@ -26,7 +26,7 @@ const defaults=[
 ["魏以恩","徐譽澄","王若蘅","王玟錦","洪子恩","黃翊","謝采縈"],
 ["生科","本土語","","","趙若晴","陳廷碩","沈鈺叡"],
 ["","","黃恩加","","蘇昱瑋","張祐綺","柯宥廷"],
-["","","楊依穎","黃智鴻","周欣喬","李宜宸","林思翰"]];
+["簡鈺諠","","楊依穎","黃智鴻","周欣喬","李宜宸","林思翰"]];
 const subjects=new Set(["國文","英語","健康","數學","自然","表演","歷史","美術","音樂","地理","童軍","體育器材","公民","家政","生科","本土語","體育"]);
 function fit(){const v=visualViewport,w=v?v.width:innerWidth,h=v?v.height:innerHeight,s=Math.min(w/W,h/H),x=(w-W*s)/2+(v?v.offsetLeft:0),y=(h-H*s)/2+(v?v.offsetTop:0);document.getElementById("wrap").style.transform=`translate(${x}px,${y}px) scale(${s})`}
 addEventListener("resize",fit);addEventListener("orientationchange",()=>setTimeout(fit,250));if(visualViewport){visualViewport.addEventListener("resize",fit);visualViewport.addEventListener("scroll",fit)}
