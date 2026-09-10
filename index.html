@@ -67,11 +67,11 @@ if(window.visualViewport){window.visualViewport.addEventListener("resize",fitSta
 
 const LS_KEY="seatGridData-v2";
 const defaultData=[
-["", "20林思翰", "13簡品嫻", "21林哲旭", "02王玟錦", "28黃恩加", "24徐譽澄"],
-["31劉宸宇", "07胡芯瑜", "11趙若晴", "06洪語宸", "08張祐綺", "22柯宥廷", "32魏以恩"],
-["25高詰翔", "30黃  翊", "33蘇昱瑋", "17吳以攸", "23洪子恩", "01王予彤", "12謝采縈"],
-["18李宥恩", "04沈鈺叡", "14簡鈺諠", "26陳廷碩", "03李宜宸", "10楊依穎", "15王若蘅"],
-["05周欣喬", "09曾心澤", "29黃智鴻", "27陳宥嘉", "19李祖瑒", "16古紹伯", ""]
+["", "24徐譽澄", "33蘇昱瑋", "01王予彤", "12謝采縈", "07胡芯瑜", "16古紹伯"],
+["13簡品嫻", "21林哲旭", "28黃恩加", "06洪語宸", "08張祐綺", "30黃翊", "05周欣喬"],
+["19李祖瑒", "29黃智鴻", "26陳廷碩", "15王若蘅", "10楊依穎", "09曾心澤", "20林思翰"],
+["17吳以攸", "02王玟錦", "32魏以恩", "14簡鈺諠", "04沈鈺叡", "18李宥恩", "11趙若晴"],
+["03李宜宸", "25高詰翔", "31劉宸宇", "27陳宥嘉", "22柯宥廷", "23洪子恩", ""]
 ];
 function parseSeats(data){return data.map(row=>row.map(item=>{const s=String(item||"").trim();if(!s)return null;const m=s.match(/^(\d+)(.+)$/);return m?{no:m[1],name:m[2].trim()}:{no:"",name:s}}))}
 function validGrid(data){return Array.isArray(data)&&data.length===5&&data.every(r=>Array.isArray(r)&&r.length===7)}
